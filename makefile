@@ -52,6 +52,9 @@ $(DEP)/%.d: ;
 
 -include $(DEPFILES)
 
+install:
+	cp $(TARGET) /usr/local/bin
+	
 clean:
 	rm -r $(BUILD)
 	rm -r $(DEP)
