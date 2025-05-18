@@ -100,6 +100,25 @@ static void sortBalls(uint8_t * balls, int numBalls) {
     }
 }
 
+static void shuffleSetRounds(uint8_t * set, int maxBallNumber, int numRounds) {
+    srand(getRandomUint32());
+
+    for (int c = 0; c < numRounds; c++) {
+        // Shuffle the set using Fisher-Yates algorithm
+        for (int i = maxBallNumber - 1; i > 0; i--) {
+            int j = constrainedRand(maxBallNumber);
+            uint8_t temp = set[i];
+            set[i] = set[j];
+            set[j] = temp;
+        }
+    }
+}
+
+static void shuffleSet(uint8_t * set, int maxBallNumber) {
+    int numRounds = 256 + (getRandomUint16() / 8);
+    shuffleSetRounds(set, maxBallNumber, numRounds);
+}
+
 static uint8_t * getBalls(uint8_t * set, int maxBallNumber, int numBalls) {
     uint8_t * balls = (uint8_t *)malloc(numBalls * sizeof(uint8_t));
     
@@ -109,10 +128,12 @@ static uint8_t * getBalls(uint8_t * set, int maxBallNumber, int numBalls) {
     }
 
     // Choose a point to take balls from...
-    int ballPoint = constrainedRand(maxBallNumber);
+    int ballPoint = maxBallNumber / 3;
 
     for (int i = 0; i < numBalls; i++) {
         balls[i] = set[ballPoint++];
+
+        shuffleSetRounds(set, maxBallNumber, 256);
 
         if (ballPoint >= maxBallNumber) {
             ballPoint = 0;
@@ -127,22 +148,6 @@ static uint8_t * getBalls(uint8_t * set, int maxBallNumber, int numBalls) {
 static void initialiseSet(uint8_t * set, int maxBallNumber) {
     for (int i = 0; i < maxBallNumber; i++) {
         set[i] = i + 1;
-    }
-}
-
-static void shuffleSet(uint8_t * set, int maxBallNumber) {
-    srand(getRandomUint32());
-
-    int numRounds = 256 + (getRandomUint16() / 16);
-
-    for (int c = 0; c < numRounds; c++) {
-        // Shuffle the set using Fisher-Yates algorithm
-        for (int i = maxBallNumber - 1; i > 0; i--) {
-            int j = constrainedRand(maxBallNumber);
-            uint8_t temp = set[i];
-            set[i] = set[j];
-            set[j] = temp;
-        }
     }
 }
 
