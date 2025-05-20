@@ -130,14 +130,19 @@ static uint8_t * getBalls(uint8_t * set, int maxBallNumber, int numBalls) {
     // Choose a point to take balls from...
     int ballPoint = maxBallNumber / 3;
 
-    for (int i = 0; i < numBalls; i++) {
-        balls[i] = set[ballPoint++];
+    for (int i = 0;i < numBalls;i++) {
+        int ball = set[ballPoint];
+
+        for (int j = 0;j < numBalls;j++) {
+            while (ball == balls[j]) {
+                shuffleSetRounds(set, maxBallNumber, 256);
+                ball = set[ballPoint];
+            }
+        }
+
+        balls[i] = ball;
 
         shuffleSetRounds(set, maxBallNumber, 256);
-
-        if (ballPoint >= maxBallNumber) {
-            ballPoint = 0;
-        } 
     }
 
     sortBalls(balls, numBalls);
