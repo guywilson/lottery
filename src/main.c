@@ -4,35 +4,24 @@
 #include <stdint.h>
 #include <time.h>
 
-#define NUM_BALLS_IN_PRIMARY_SET         5
-#define NUM_BALLS_IN_SECONDARY_SET       2
-
 #define NUM_RANDOM_BYTES               256
 
-#define PRIMARY_SET_MAX                 50
-#define SECONDAY_SET_MAX                11
+struct _ball_t {
+    struct _ball_t * previous;
+    struct _ball_t * next;
+
+    uint8_t value;
+};
+
+typedef struct _ball_t ball_t;
 
 static uint8_t randomBytes[NUM_RANDOM_BYTES];
 static int randomBytePointer = 0;
 
-static int _getProgNameStartPos(char * pszProgName) {
-	int i = strlen(pszProgName);
-
-	while (pszProgName[i] != '/' && i > 0) {
-		i--;	
-	}
-
-	if (pszProgName[i] == '/') {
-		i++;
-	}
-
-	return i;
-}
-
 static void printUsage(char * pszProgName) {
-	printf("Using %s:\n", &pszProgName[_getProgNameStartPos(pszProgName)]);
-    printf("    %s --help (show this help)\n", &pszProgName[_getProgNameStartPos(pszProgName)]);
-    printf("    %s [options]\n", &pszProgName[_getProgNameStartPos(pszProgName)]);
+	printf("Using lottery:\n");
+    printf("    lottery --help (show this help)\n");
+    printf("    lottery [options]\n");
     printf("    options: --game=[game] where game in ('eur', 'lot', 'sfl')\n");
     printf("             --draws=[num draws]\n\n");
 }
@@ -64,15 +53,15 @@ static uint8_t getRandomByte(void) {
     return randomBytes[randomBytePointer++];
 }
 
-static uint32_t getRandomUint32(void) {
-    uint32_t randomValue = 0;
+// static uint32_t getRandomUint32(void) {
+//     uint32_t randomValue = 0;
     
-    for (int i = 0; i < sizeof(uint32_t); i++) {
-        randomValue |= (getRandomByte() << (i * 8));
-    }
+//     for (int i = 0; i < sizeof(uint32_t); i++) {
+//         randomValue |= (getRandomByte() << (i * 8));
+//     }
     
-    return randomValue;
-}
+//     return randomValue;
+// }
 
 static uint16_t getRandomUint16(void) {
     uint16_t randomValue = 0;
@@ -84,8 +73,43 @@ static uint16_t getRandomUint16(void) {
     return randomValue;
 }
 
-static int inline constrainedRand(int max) {
-    return (rand() / ((RAND_MAX + 1u) / max));
+static inline void initialiseRNG(void) {
+    time_t currentTime = time(NULL);
+    
+    static uint16_t seedArray[3];
+
+    seedArray[0] = getRandomUint16() ^ (currentTime & 0xFFFF);
+    seedArray[1] = getRandomUint16() ^ ((currentTime >> 16) & 0xFFFF);
+    seedArray[2] = getRandomUint16();
+
+    seed48(seedArray);
+}
+
+static inline ball_t * getBallAt(ball_t * set, int index) {
+    ball_t * ball = set;
+
+    for (int i = 0;i < index;i++) {
+        ball = ball->next;
+
+        if (ball == NULL) {
+            break;
+        }
+    }
+
+    return ball;
+}
+
+static inline ball_t * getRandomBall(ball_t * set, int max) {
+    return getBallAt(set, (int)(drand48() * (double)max));
+}
+
+static ball_t * removeBallAt(ball_t * set, int index) {
+    ball_t * ball = getBallAt(set, index);
+
+    ball->previous->next = ball->next;
+    ball->next->previous = ball->previous;
+
+    return ball;
 }
 
 static void sortBalls(uint8_t * balls, int numBalls) {
@@ -100,26 +124,26 @@ static void sortBalls(uint8_t * balls, int numBalls) {
     }
 }
 
-static void shuffleSetRounds(uint8_t * set, int maxBallNumber, int numRounds) {
-    srand(getRandomUint32());
-
+static void shuffleSetRounds(ball_t * set, int maxBallNumber, int numRounds) {
     for (int c = 0; c < numRounds; c++) {
         // Shuffle the set using Fisher-Yates algorithm
         for (int i = maxBallNumber - 1; i > 0; i--) {
-            int j = constrainedRand(maxBallNumber);
-            uint8_t temp = set[i];
-            set[i] = set[j];
-            set[j] = temp;
+            ball_t * rball = getRandomBall(set, maxBallNumber);
+            ball_t * tball = getBallAt(set, i);
+
+            uint8_t temp = tball->value;
+            tball->value = rball->value;
+            rball->value = temp;
         }
     }
 }
 
-static void shuffleSet(uint8_t * set, int maxBallNumber) {
-    int numRounds = 256 + (getRandomUint16() / 8);
+static void shuffleSet(ball_t * set, int maxBallNumber) {
+    int numRounds = 256 + (getRandomUint16() / 2);
     shuffleSetRounds(set, maxBallNumber, numRounds);
 }
 
-static uint8_t * getBalls(uint8_t * set, int maxBallNumber, int numBalls) {
+static uint8_t * getBalls(ball_t * set, int maxBallNumber, int numBalls) {
     uint8_t * balls = (uint8_t *)malloc(numBalls * sizeof(uint8_t));
     
     if (balls == NULL) {
@@ -131,16 +155,9 @@ static uint8_t * getBalls(uint8_t * set, int maxBallNumber, int numBalls) {
     int ballPoint = maxBallNumber / 3;
 
     for (int i = 0;i < numBalls;i++) {
-        int ball = set[ballPoint];
+        ball_t * chosenBall = removeBallAt(set, ballPoint);
 
-        for (int j = 0;j < numBalls;j++) {
-            while (ball == balls[j]) {
-                shuffleSetRounds(set, maxBallNumber, 256);
-                ball = set[ballPoint];
-            }
-        }
-
-        balls[i] = ball;
+        balls[i] = chosenBall->value;
 
         shuffleSetRounds(set, maxBallNumber, 256);
     }
@@ -150,14 +167,32 @@ static uint8_t * getBalls(uint8_t * set, int maxBallNumber, int numBalls) {
     return balls;
 }
 
-static void initialiseSet(uint8_t * set, int maxBallNumber) {
+static void initialiseSet(ball_t * set, int maxBallNumber) {
     for (int i = 0; i < maxBallNumber; i++) {
-        set[i] = i + 1;
+        ball_t * ball = &set[i];
+
+        ball->value = i + 1;
+
+        if (i == 0) {
+            ball->previous = NULL;
+            ball->next = &set[i + 1];
+        }
+        else if (i == maxBallNumber - 1) {
+            ball->previous = &set[i - 1];
+            ball->next = NULL;
+        }
+        else {
+            ball->previous = &set[i - 1];
+            ball->next = &set[i + 1];
+        }
     }
+
+    set[0].previous = &set[maxBallNumber - 1];
+    set[maxBallNumber - 1].next = &set[0];
 }
 
 int drawBalls(int setLength, int numBalls) {
-    uint8_t * set = (uint8_t *)malloc(setLength * sizeof(uint8_t));
+    ball_t * set = (ball_t *)malloc(setLength * sizeof(ball_t));
 
     if (set == NULL) {
         fprintf(stderr, "Memory allocation failed\n");
@@ -166,12 +201,6 @@ int drawBalls(int setLength, int numBalls) {
     
     initialiseSet(set, setLength);
     shuffleSet(set, setLength);
-
-    // printf("\nSet: ");
-    // for (int i = 0; i < setLength; i++) {
-    //     printf("%d ", set[i]);
-    // }
-    // printf("\n\n");
 
     uint8_t * balls = getBalls(set, setLength, numBalls);
 
@@ -253,6 +282,7 @@ int main(int argc, char *argv[]) {
     }
 
     generateRandomBytes();
+    initialiseRNG();
 
     for (int i = 0;i < numDraws;i++) {
         if (drawBalls(primarySetLength, numPrimaryBalls)) {
