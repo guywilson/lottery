@@ -300,7 +300,7 @@ int main(int argc, char *argv[]) {
     initialiseRNG();
 
     /*
-    ** Warm up the machine...
+    ** Warm up the machine, then draw some balls...
     */
     uint8_t * balls;
     for (int i = 0;i < numDraws + NUM_WARMUP_CYCLES;i++) {
